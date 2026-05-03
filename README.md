@@ -28,6 +28,55 @@ CopyFail Guard helps operators reduce exposure to the Linux `algif_aead` / `AF_A
 > Final fix: install your vendor’s patched kernel and reboot.  
 > This tool covers the operational gap between disclosure and full fleet patching.
 
+
+## Am I affected?
+
+Run the safe exposure check first:
+
+```bash
+sudo ./bin/copyfail-guard.sh assess
+```
+
+How to read the result:
+
+| Verdict family | What it means | What to do |
+|---|---|---|
+| `EXPOSED_*` | `algif_aead` / AF_ALG appears reachable or loadable | Mitigate now, then patch and reboot |
+| `PARTIALLY_MITIGATED_*` | A block exists but the loaded module or reboot state still matters | Reboot or unload safely, then verify |
+| `INTERIM_MITIGATED_*` | Local mitigation is active | Keep it, but still patch and reboot |
+| `LOW_OBVIOUS_EXPOSURE_*` | Local checks did not find obvious `algif_aead` exposure | Confirm vendor patch status anyway |
+
+If you run untrusted containers, CI jobs, sandboxes, or multi-user workloads, also test whether AF_ALG socket creation is blocked inside that runtime:
+
+```bash
+python3 tools/afalg-socket-test.py
+```
+
+`PERMITTED` does not prove successful exploitation, but it proves the relevant userspace crypto API is reachable. For defensive operations, that is enough reason to apply the mitigation while you confirm the patched kernel rollout.
+
+## Does this prove vulnerability?
+
+No destructive proof of concept is included. That is a feature, not a gap.
+
+A real Copy Fail exploit proof would need to validate kernel memory/page-cache impact or privilege escalation. Shipping that in a public mitigation repo would make the project less safe and less deployable in production.
+
+CopyFail Guard proves the things operators can safely act on:
+
+- whether the risky component is available, loaded, built-in, or blocked
+- whether AF_ALG socket creation is permitted in a target runtime
+- whether the host has an interim mitigation in place
+- whether the remaining required action is unload, reboot, seccomp, or vendor patching
+
+For final vulnerability status, combine this tool with vendor advisory/package inventory and reboot evidence.
+
+## Usability and resolution model
+
+This project is built for Linux sysadmins, DevSecOps engineers, platform teams, and incident responders. It is intentionally clone-and-run: no compiler, kernel headers, exploit code, or third-party package manager is required for the core host workflow.
+
+Operational UX is high for the intended audience: `doctor`, `assess`, `mitigate`, `verify`, `rollback`, and `--json` map directly to an incident-response flow. Casual-user UX is necessarily medium because this is kernel/container hardening and still requires Linux administration judgment.
+
+Resolution model: **mitigation, not cure**. CopyFail Guard reduces exposure and verifies controls. The durable fix remains vendor patched kernel plus reboot.
+
 ## Quick start
 
 Clone-and-run:
@@ -116,7 +165,7 @@ No exploit code, compiler, kernel headers, or third-party packages are required.
 
 ## Safe assessment vs proof of concept
 
-CopyFail Guard does **not** include an exploit proof of concept. That is intentional. A real Copy Fail exploit check would need to exercise dangerous kernel behavior and validate a write primitive or privilege impact, which is not appropriate for a public defensive tool.
+CopyFail Guard does **not** include an exploit proof of concept. That is intentional. See [Does this prove vulnerability?](#does-this-prove-vulnerability).
 
 Instead, `assess` performs a safe operational check:
 

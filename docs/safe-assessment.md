@@ -70,3 +70,13 @@ copyfail-guard doctor --json
 ```
 
 `assess --json` includes `safe_assessment: true`, `exploit_attempted: false`, the verdict, exit code, reasons, next actions, and the final-resolution reminder.
+
+## How users know whether it matters
+
+Use three layers of evidence:
+
+1. **Vendor/package evidence** — confirm whether the running kernel version includes the vendor fix for CVE-2026-31431.
+2. **Local exposure evidence** — run `copyfail-guard assess` to see whether `algif_aead` is available, loaded, built-in, or blocked.
+3. **Runtime reachability evidence** — run `tools/afalg-socket-test.py` in the target container/sandbox/user context to see whether `socket(AF_ALG)` is permitted.
+
+A safe tool cannot honestly promise “exploitable” without crossing into exploit validation. It can, however, prove enough to drive a defensive decision: if the vulnerable component is present or AF_ALG is reachable, mitigate while patch status is confirmed.
