@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+cd "$(dirname "$0")/.."
+
+bash -n bin/copyfail-guard.sh
+bin/copyfail-guard.sh --no-logo help >/tmp/cfg-help.txt
+grep -q 'CopyFail Guard' /tmp/cfg-help.txt || grep -q 'copyfail-guard' /tmp/cfg-help.txt
+
+bin/copyfail-guard.sh --no-logo seccomp-docker /tmp/copyfail-emergency.json >/tmp/cfg-seccomp.txt
+python3 -m json.tool /tmp/copyfail-emergency.json >/dev/null
+python3 - <<'PY'
+import json
+p=json.load(open('/tmp/copyfail-emergency.json'))
+rule=p['syscalls'][0]
+assert rule['names']==['socket']
+assert rule['action']=='SCMP_ACT_ERRNO'
+assert rule['args'][0]['index']==0
+assert rule['args'][0]['value']==38
+PY
+
+cat >/tmp/base-seccomp.json <<'JSON'
+{
+  "defaultAction": "SCMP_ACT_ERRNO",
+  "architectures": ["SCMP_ARCH_X86_64"],
+  "syscalls": [
+    {"names": ["read", "write", "socket"], "action": "SCMP_ACT_ALLOW"}
+  ]
+}
+JSON
+bin/copyfail-guard.sh --no-logo seccomp-patch /tmp/base-seccomp.json /tmp/copyfail-patched.json >/tmp/cfg-patch.txt
+python3 -m json.tool /tmp/copyfail-patched.json >/dev/null
+python3 - <<'PY'
+import json
+p=json.load(open('/tmp/copyfail-patched.json'))
+assert p['syscalls'][0]['names']==['socket']
+assert p['syscalls'][0]['action']=='SCMP_ACT_ERRNO'
+assert p['syscalls'][0]['args'][0]['value']==38
+assert p['syscalls'][1]['names']==['socket']
+assert p['syscalls'][1]['action']=='SCMP_ACT_ALLOW'
+assert p['syscalls'][1]['args'][0]['op']=='SCMP_CMP_NE'
+assert 'socket' not in p['syscalls'][2]['names']
+PY
+
+bin/copyfail-guard.sh --no-logo --dry-run seccomp-docker /tmp/should-not-exist.json >/tmp/cfg-dry.txt 2>&1
+[[ ! -e /tmp/should-not-exist.json ]]
+
+echo "ci-smoke: ok"

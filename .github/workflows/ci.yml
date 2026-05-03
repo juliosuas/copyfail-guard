@@ -1,0 +1,50 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: ShellCheck
+        run: shellcheck bin/copyfail-guard.sh tests/ci-smoke.sh
+
+  smoke:
+    name: smoke (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - ubuntu:24.04
+          - debian:12
+          - fedora:latest
+          - almalinux:9
+          - amazonlinux:2023
+          - opensuse/leap:15.6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Smoke tests in container
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          docker run --rm -v "$PWD:/src:ro" -w /src "${{ matrix.image }}" bash -lc '
+            set -Eeuo pipefail
+            if command -v apt-get >/dev/null 2>&1; then
+              apt-get update && apt-get install -y bash python3 grep coreutils
+            elif command -v dnf >/dev/null 2>&1; then
+              dnf install -y bash python3 grep coreutils
+            elif command -v yum >/dev/null 2>&1; then
+              yum install -y bash python3 grep coreutils
+            elif command -v zypper >/dev/null 2>&1; then
+              zypper --non-interactive refresh
+              zypper --non-interactive install bash python3 grep coreutils
+            fi
+            tests/ci-smoke.sh
+          '

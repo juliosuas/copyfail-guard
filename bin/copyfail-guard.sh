@@ -6,16 +6,14 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-APP_NAME="CopyFail Guard"
-APP_SLUG="copyfail-guard"
 CVE="CVE-2026-31431"
 MODULE="algif_aead"
 MODPROBE_CONF="/etc/modprobe.d/99-copyfail-guard.conf"
 DEFAULT_SECCOMP_OUT="./copyfail-afalg-seccomp.json"
 
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; BOLD='\033[1m'; DIM='\033[2m'; NC='\033[0m'
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; BOLD='\033[1m'; NC='\033[0m'
 NO_COLOR="${NO_COLOR:-}"
-if [[ -n "$NO_COLOR" || ! -t 1 ]]; then RED=''; GREEN=''; YELLOW=''; BLUE=''; BOLD=''; DIM=''; NC=''; fi
+if [[ -n "$NO_COLOR" || ! -t 1 ]]; then RED=''; GREEN=''; YELLOW=''; BLUE=''; BOLD=''; NC=''; fi
 
 log()  { printf "%b[+]%b %s\n" "$GREEN" "$NC" "$*"; }
 warn() { printf "%b[!]%b %s\n" "$YELLOW" "$NC" "$*" >&2; }
@@ -81,6 +79,7 @@ need_linux() {
 }
 
 need_root_for_write() {
+  [[ "${DRY_RUN:-0}" == "1" ]] && return 0
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
     err "Root privileges required. Re-run with sudo."
     exit 3
@@ -104,9 +103,18 @@ run_cmd() {
   fi
 }
 
+need_cmd() {
+  local cmd="$1"
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    err "Required command not found: $cmd"
+    exit 69
+  fi
+}
+
 os_release_value() {
   local key="$1"
   [[ -r /etc/os-release ]] || return 1
+  # shellcheck source=/dev/null
   . /etc/os-release
   case "$key" in
     PRETTY_NAME) printf '%s' "${PRETTY_NAME:-unknown}" ;;
@@ -117,6 +125,19 @@ os_release_value() {
 
 module_available() {
   modinfo "$MODULE" >/dev/null 2>&1
+}
+
+module_builtin() {
+  local filename=""
+  if command -v modinfo >/dev/null 2>&1; then
+    filename="$(modinfo -F filename "$MODULE" 2>/dev/null || true)"
+    [[ "$filename" == "(builtin)" ]] && return 0
+  fi
+  local release
+  release="$(uname -r)"
+  grep -RhsE "(^|/)$MODULE\.ko(\.(xz|zst|gz))?$|kernel/.*/$MODULE\.ko" \
+    "/lib/modules/$release/modules.builtin" \
+    "/usr/lib/modules/$release/modules.builtin" >/dev/null 2>&1
 }
 
 module_loaded() {
@@ -150,7 +171,9 @@ status() {
   info "Kernel: $(uname -r) ($(uname -m))"
   printf "\n"
 
-  if module_available; then
+  if module_builtin; then
+    err "$MODULE appears built into this kernel. modprobe.d/rmmod cannot disable built-in code. Patch/reboot and use seccomp for untrusted workloads."
+  elif module_available; then
     warn "$MODULE is available on this kernel. Treat as exposed until patched or mitigated."
   else
     log "$MODULE is not available via modinfo. Exposure may already be reduced or built differently."
@@ -187,6 +210,11 @@ status() {
 
 mitigate() {
   need_linux; need_root_for_write; print_banner
+  if module_builtin; then
+    err "$MODULE appears built into this kernel. Host module mitigation cannot unload or block built-in code."
+    warn "Use vendor kernel patch/reboot immediately and apply seccomp to containers/CI while patching."
+    exit 4
+  fi
   warn "This will write $MODPROBE_CONF and try to unload $MODULE if currently loaded."
   confirm "Apply CopyFail Guard mitigation now?" || { warn "Aborted."; exit 1; }
 
@@ -197,8 +225,16 @@ mitigate() {
     printf "%b[dry-run]%b write %s:\n%s" "$YELLOW" "$NC" "$MODPROBE_CONF" "$content"
   else
     umask 022
-    printf "%b" "$content" > "$MODPROBE_CONF"
-    chmod 0644 "$MODPROBE_CONF"
+    mkdir -p "$(dirname "$MODPROBE_CONF")"
+    if [[ -L "$MODPROBE_CONF" ]]; then
+      err "$MODPROBE_CONF is a symlink; refusing to overwrite. Remove it manually if intentional."
+      exit 73
+    fi
+    local tmp
+    tmp="$(mktemp "${MODPROBE_CONF}.tmp.XXXXXX")"
+    printf "%b" "$content" > "$tmp"
+    install -m 0644 "$tmp" "$MODPROBE_CONF"
+    rm -f "$tmp"
     log "Wrote $MODPROBE_CONF"
   fi
 
@@ -216,13 +252,21 @@ mitigate() {
     log "$MODULE was not loaded."
   fi
 
-  verify || true
+  if [[ "${DRY_RUN:-0}" == "1" ]]; then
+    warn "Dry run complete; verification skipped because no changes were applied."
+  else
+    verify || true
+  fi
 }
 
 verify() {
   need_linux
   print_banner
   local ok=0
+  if module_builtin; then
+    err "FAIL: $MODULE appears built into this kernel; modprobe mitigation cannot disable it."
+    ok=1
+  fi
   if modprobe_block_active; then
     log "PASS: modprobe blocks $MODULE."
   else
@@ -256,6 +300,10 @@ rollback() {
 
 generate_seccomp() {
   local out="${1:-$DEFAULT_SECCOMP_OUT}"
+  if [[ "${DRY_RUN:-0}" == "1" ]]; then
+    warn "Dry run: would write emergency seccomp profile to $out"
+    return 0
+  fi
   cat > "$out" <<'JSON'
 {
   "defaultAction": "SCMP_ACT_ALLOW",
@@ -264,7 +312,10 @@ generate_seccomp() {
     "SCMP_ARCH_X86",
     "SCMP_ARCH_X32",
     "SCMP_ARCH_AARCH64",
-    "SCMP_ARCH_ARM"
+    "SCMP_ARCH_ARM",
+    "SCMP_ARCH_PPC64LE",
+    "SCMP_ARCH_S390X",
+    "SCMP_ARCH_RISCV64"
   ],
   "syscalls": [
     {
@@ -296,6 +347,7 @@ EOF
 
 patch_seccomp() {
   local base="${1:-}" out="${2:-}"
+  need_cmd python3
   if [[ -z "$base" || -z "$out" ]]; then
     err "Usage: copyfail-guard seccomp-patch BASE_PROFILE OUT_PROFILE"
     exit 64
@@ -303,6 +355,10 @@ patch_seccomp() {
   if [[ ! -r "$base" ]]; then
     err "Cannot read base seccomp profile: $base"
     exit 66
+  fi
+  if [[ "${DRY_RUN:-0}" == "1" ]]; then
+    warn "Dry run: would patch $base and write $out"
+    return 0
   fi
   python3 - "$base" "$out" <<'PY'
 import json, sys
@@ -316,11 +372,38 @@ rule = {
     "comment": "CopyFail Guard: block AF_ALG sockets for CVE-2026-31431"
 }
 profile.setdefault("syscalls", [])
-# Put deny rule first; libseccomp evaluates matching rules by syscall and args.
-profile["syscalls"] = [r for r in profile["syscalls"] if not (
-    "socket" in r.get("names", []) and any(a.get("index") == 0 and a.get("value") == 38 for a in r.get("args", []))
-)]
-profile["syscalls"].insert(0, rule)
+new_syscalls = []
+had_unconditional_socket_allow = False
+for entry in profile["syscalls"]:
+    names = entry.get("names", [])
+    if "socket" not in names:
+        new_syscalls.append(entry)
+        continue
+    args = entry.get("args", [])
+    is_existing_afalg_rule = any(a.get("index") == 0 and a.get("value") == 38 for a in args)
+    if is_existing_afalg_rule:
+        continue
+    if entry.get("action") == "SCMP_ACT_ALLOW" and not args:
+        had_unconditional_socket_allow = True
+        remaining = [n for n in names if n != "socket"]
+        if remaining:
+            kept = dict(entry)
+            kept["names"] = remaining
+            new_syscalls.append(kept)
+        continue
+    # Preserve non-trivial socket rules. Operators should validate generated
+    # profiles in their runtime because seccomp baselines can be customized.
+    new_syscalls.append(entry)
+
+patched = [rule]
+if had_unconditional_socket_allow:
+    patched.append({
+        "names": ["socket"],
+        "action": "SCMP_ACT_ALLOW",
+        "args": [{"index": 0, "value": 38, "op": "SCMP_CMP_NE"}],
+        "comment": "CopyFail Guard: preserve socket() except AF_ALG"
+    })
+profile["syscalls"] = patched + new_syscalls
 with open(out, 'w', encoding='utf-8') as f:
     json.dump(profile, f, indent=2)
     f.write("\n")
@@ -352,7 +435,7 @@ EOF
 }
 
 main() {
-  local cmd="${1:-help}"; shift || true
+  local cmd=""
   DRY_RUN=0; ASSUME_YES=0; NO_LOGO=0
   local positional=()
   while [[ $# -gt 0 ]]; do
@@ -361,10 +444,13 @@ main() {
       --yes|-y) ASSUME_YES=1 ;;
       --no-logo) NO_LOGO=1 ;;
       -h|--help) cmd="help" ;;
+      status|mitigate|verify|rollback|seccomp-docker|seccomp-patch|k8s-example|help)
+        if [[ -z "$cmd" ]]; then cmd="$1"; else positional+=("$1"); fi ;;
       *) positional+=("$1") ;;
     esac
     shift
   done
+  cmd="${cmd:-help}"
   if [[ ${#positional[@]} -gt 0 ]]; then
     set -- "${positional[@]}"
   else

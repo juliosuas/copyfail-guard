@@ -1,5 +1,11 @@
 # CopyFail Guard
 
+[![CI](https://github.com/juliosuas/copyfail-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/juliosuas/copyfail-guard/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+![Platform](https://img.shields.io/badge/platform-Linux-blue)
+![Shell](https://img.shields.io/badge/shell-bash-4EAA25)
+![No exploit code](https://img.shields.io/badge/exploit%20code-not%20included-important)
+
 ```text
    ______                 ______      _ __   ______                     __
   / ____/___  ____  __  _/ ____/___ _(_) /  / ____/_  ______ __________/ /
@@ -9,46 +15,93 @@
           /_/    /____/
 ```
 
-**CopyFail Guard** is a Linux sysadmin helper for quickly mitigating **CVE-2026-31431**, also known as **Copy Fail**, while you roll out patched kernels.
+**Fast, auditable Linux mitigation for CVE-2026-31431 “Copy Fail” while kernels get patched.**
 
-It does three practical things:
+CopyFail Guard helps operators reduce exposure to the Linux `algif_aead` / `AF_ALG` issue by:
 
-1. Inspects whether the vulnerable AF_ALG AEAD frontend (`algif_aead`) is present, loaded, or already blocked.
-2. Applies a persistent host mitigation by disabling `algif_aead` through `modprobe.d` and unloading it when safe.
-3. Patches an existing Docker/Podman/Kubernetes seccomp profile so it blocks `AF_ALG` socket creation for untrusted containers, CI runners, and sandboxes.
+- checking whether `algif_aead` is available, loaded, built-in, or already blocked
+- installing a persistent `modprobe.d` block and unloading the module when safe
+- adding an AF_ALG-deny rule to Docker, Podman, and Kubernetes seccomp profiles
+- validating AF_ALG reachability without shipping exploit code
 
-> Patch fast. Mitigate faster. Verify always.
+> Final fix: install your vendor’s patched kernel and reboot.  
+> This tool covers the operational gap between disclosure and full fleet patching.
 
-## Why this matters
-
-Copy Fail is a Linux kernel local privilege escalation in the `algif_aead` component of the AF_ALG userspace crypto API. Public advisories describe a page-cache write primitive reachable by unprivileged local users and especially dangerous on shared-kernel systems: Kubernetes nodes, CI/CD runners, multi-tenant hosts, agent sandboxes, and dev boxes.
-
-The proper fix is a vendor kernel update containing the upstream revert/fix and a reboot into the patched kernel. This tool is for the gap between “we know” and “everything is patched.”
-
-## Install
+## Quick start
 
 ```bash
 git clone https://github.com/juliosuas/copyfail-guard.git
 cd copyfail-guard
 chmod +x bin/copyfail-guard.sh
-```
 
-No runtime dependencies beyond standard Linux admin tools (`bash`, `modprobe`, `lsmod`, `rmmod`). `lsof` or `ss` are optional for visibility.
-
-## Quick start
-
-```bash
-# Inspect exposure indicators
 sudo ./bin/copyfail-guard.sh status
-
-# Apply host mitigation
 sudo ./bin/copyfail-guard.sh mitigate --yes
-
-# Confirm mitigation
 sudo ./bin/copyfail-guard.sh verify
 ```
 
-The host mitigation writes:
+Container / CI hardening:
+
+```bash
+./bin/copyfail-guard.sh seccomp-patch docker-default.json copyfail-seccomp.json
+docker run --security-opt seccomp=./copyfail-seccomp.json IMAGE
+```
+
+Validate that AF_ALG is blocked inside a protected container:
+
+```bash
+docker run --rm \
+  --security-opt seccomp=./copyfail-seccomp.json \
+  -v "$PWD/tools:/tools:ro" \
+  python:3.12-alpine \
+  python /tools/afalg-socket-test.py
+```
+
+Expected protected result:
+
+```text
+BLOCKED: socket(AF_ALG) denied by policy (...)
+```
+
+## Why this matters
+
+Copy Fail is a Linux kernel local privilege escalation in the `algif_aead` component of the AF_ALG userspace crypto API. Public advisories describe a page-cache write primitive reachable by unprivileged local users and especially dangerous on shared-kernel systems: Kubernetes nodes, CI/CD runners, multi-tenant hosts, agent sandboxes, and developer boxes.
+
+The correct fix is a vendor kernel update containing the upstream revert/fix and a reboot into the patched kernel. CopyFail Guard is a defensive operations helper for the window before that reboot is complete across the fleet.
+
+## What the tool does
+
+| Area | Command | Purpose |
+|---|---|---|
+| Host inspection | `status` | Show OS/kernel, module availability, loaded state, built-in warning, modprobe block, and obvious AF_ALG consumers |
+| Host mitigation | `mitigate` | Write `/etc/modprobe.d/99-copyfail-guard.conf` and attempt to unload `algif_aead` |
+| Verification | `verify` | Fail clearly if the module is loaded, built-in, or not blocked |
+| Rollback | `rollback` | Remove only CopyFail Guard’s managed modprobe file |
+| Containers | `seccomp-patch` | Patch an existing seccomp profile to deny `socket(AF_ALG, ...)` while preserving normal socket use |
+| Emergency profile | `seccomp-docker` | Generate a targeted AF_ALG-deny profile for emergency use |
+| Kubernetes | `k8s-example` | Print a Localhost seccomp pod example |
+
+## Install requirements
+
+Core host commands:
+
+- Linux
+- `bash`
+- kmod tools: `modinfo`, `modprobe`, `lsmod`, `rmmod` where available
+- `grep`, `awk`, `mktemp`, `install`
+
+Optional visibility tools:
+
+- `lsof` or `ss` for AF_ALG consumer checks
+
+Seccomp profile patching:
+
+- `python3` is required for `seccomp-patch`
+
+No exploit code, compiler, kernel headers, or third-party packages are required.
+
+## Host mitigation details
+
+`mitigate` writes:
 
 ```text
 /etc/modprobe.d/99-copyfail-guard.conf
@@ -57,6 +110,7 @@ The host mitigation writes:
 with:
 
 ```text
+# Managed by CopyFail Guard for CVE-2026-31431
 install algif_aead /bin/false
 blacklist algif_aead
 ```
@@ -67,11 +121,13 @@ Then it attempts:
 sudo rmmod algif_aead
 ```
 
-If the module is in use, the persistent block remains installed and the host should be rebooted or AF_ALG consumers should be stopped before unloading.
+If the module is currently in use, `rmmod` may fail. In that case the persistent block remains installed; stop AF_ALG consumers or reboot after applying the mitigation.
+
+The script refuses to overwrite a symlink at its managed modprobe path and writes the file atomically with safe permissions.
 
 ## Container and CI hardening
 
-For untrusted workloads, block AF_ALG socket creation with seccomp even if you are patching.
+For untrusted workloads, block AF_ALG socket creation with seccomp even while you patch hosts.
 
 Recommended path: patch your existing runtime seccomp baseline instead of replacing it:
 
@@ -97,15 +153,40 @@ Emergency-only path if you do not have a baseline profile:
 ./bin/copyfail-guard.sh seccomp-docker ./copyfail-afalg-seccomp.json
 ```
 
-That generated emergency profile blocks AF_ALG but otherwise allows syscalls, so it should be treated as a targeted stopgap, not a replacement for Docker's normal default seccomp hardening.
+The generated emergency profile blocks AF_ALG but otherwise allows syscalls. Treat it as a targeted stopgap, not a replacement for Docker’s normal default seccomp hardening.
 
-For Kubernetes, see:
+For Kubernetes, place the profile under the kubelet seccomp root, commonly:
 
-```bash
-./bin/copyfail-guard.sh k8s-example
+```text
+/var/lib/kubelet/seccomp/profiles/copyfail-seccomp.json
 ```
 
-and `examples/kubernetes-seccomp-pod.yaml`.
+Then reference it with:
+
+```yaml
+securityContext:
+  seccompProfile:
+    type: Localhost
+    localhostProfile: profiles/copyfail-seccomp.json
+```
+
+See `examples/kubernetes-seccomp-pod.yaml`.
+
+## Safe validation
+
+This project includes a non-exploit AF_ALG reachability test:
+
+```bash
+python3 tools/afalg-socket-test.py
+```
+
+It only attempts to create and close an `AF_ALG` socket. It does not bind crypto operations, call `splice`, touch setuid binaries, corrupt page cache, or attempt privilege escalation.
+
+Results:
+
+- `BLOCKED` means policy denied AF_ALG for that process.
+- `PERMITTED` means AF_ALG socket creation is still allowed for that process.
+- `UNSUPPORTED` means AF_ALG is unavailable in that runtime.
 
 ## Commands
 
@@ -119,31 +200,45 @@ copyfail-guard seccomp-patch BASE OUT Patch existing seccomp profile safely
 copyfail-guard k8s-example            Print Kubernetes seccomp example
 ```
 
-Common flags:
+Flags can be placed before or after the command:
 
 ```text
---dry-run      Show planned changes
+--dry-run      Show planned changes without writing files or unloading modules
 --yes          Non-interactive confirmation
 --no-logo      Disable ASCII banner
 ```
 
 ## What should not break
 
-Disabling `algif_aead` blocks the userspace AF_ALG AEAD frontend. Public guidance indicates this should **not** affect typical uses of:
+In typical configurations, disabling `algif_aead` is not expected to affect:
 
 - LUKS / dm-crypt
 - SSH
 - OpenSSL, GnuTLS, NSS default builds
 - kTLS / in-kernel TLS
 - IPsec / XFRM
-- Normal in-kernel crypto consumers
+- normal in-kernel crypto consumers
 
-It **may** affect applications explicitly configured to use the AF_ALG engine or applications that directly create AF_ALG sockets. Check first:
+It may affect applications explicitly configured to use the AF_ALG engine or applications that directly create AF_ALG sockets. Check first:
 
 ```bash
 sudo lsof | grep AF_ALG || true
 ss -xa | grep -i alg || true
 ```
+
+## Limitations
+
+CopyFail Guard does **not**:
+
+- patch your kernel
+- prove whether your exact kernel build is exploitable
+- ship exploit code
+- protect against already-compromised root users
+- replace EDR, fleet inventory, vendor advisories, or reboot planning
+
+Host module mitigation works for modular `algif_aead`. If `algif_aead` is built into your kernel, `modprobe.d` and `rmmod` cannot disable it; patch/reboot is mandatory and seccomp should be used for untrusted workloads while patching.
+
+Seccomp protects only workloads launched with the profile. Existing running containers or pods must be restarted with the hardened profile.
 
 ## Rollback
 
@@ -153,11 +248,23 @@ sudo ./bin/copyfail-guard.sh rollback --yes
 
 Rollback removes only the file managed by this tool. It does not reload the module. Reboot or manually `modprobe algif_aead` only if you explicitly need it and have accepted the risk or patched the kernel.
 
-## Verification philosophy
+## FAQ
 
-This project intentionally does **not** ship exploit code and does not try to “prove vulnerability” by corrupting page cache or touching setuid binaries. That belongs in controlled security labs, not on production fleets.
+### Is this a replacement for patching?
 
-CopyFail Guard focuses on safe, auditable controls sysadmins can apply quickly.
+No. Patch and reboot remain the final fix.
+
+### Does this test exploitation?
+
+No. The project intentionally avoids exploit behavior. `tools/afalg-socket-test.py` only checks whether AF_ALG socket creation is reachable.
+
+### Why block AF_ALG in containers even after host mitigation?
+
+Defense in depth. Container and CI workloads are common places where untrusted code runs on a shared kernel. Seccomp makes the first step of this class of attack unreachable for that workload.
+
+### Why patch an existing seccomp profile instead of generating a new one?
+
+Because default runtime profiles contain many hardening decisions. Replacing them with a minimal emergency profile can accidentally remove protections. `seccomp-patch` keeps your baseline and adds the AF_ALG denial.
 
 ## References
 
