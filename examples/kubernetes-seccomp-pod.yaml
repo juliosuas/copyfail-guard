@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: copyfail-guarded-workload
+spec:
+  securityContext:
+    seccompProfile:
+      type: Localhost
+      localhostProfile: profiles/copyfail-afalg-seccomp.json
+  containers:
+    - name: app
+      image: alpine:latest
+      command: ["sh", "-c", "echo AF_ALG blocked; sleep 3600"]

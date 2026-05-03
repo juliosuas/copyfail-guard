@@ -1,0 +1,6 @@
+services:
+  app:
+    image: alpine:latest
+    command: ["sh", "-c", "echo AF_ALG blocked for Copy Fail mitigation; sleep 3600"]
+    security_opt:
+      - seccomp:./copyfail-afalg-seccomp.json
