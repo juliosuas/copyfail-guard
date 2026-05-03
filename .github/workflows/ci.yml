@@ -39,9 +39,9 @@ jobs:
             if command -v apt-get >/dev/null 2>&1; then
               apt-get update && apt-get install -y bash python3 grep coreutils
             elif command -v dnf >/dev/null 2>&1; then
-              dnf install -y bash python3 grep coreutils
+              dnf install -y bash python3 grep
             elif command -v yum >/dev/null 2>&1; then
-              yum install -y bash python3 grep coreutils
+              yum install -y bash python3 grep
             elif command -v zypper >/dev/null 2>&1; then
               zypper --non-interactive refresh
               zypper --non-interactive install bash python3 grep coreutils

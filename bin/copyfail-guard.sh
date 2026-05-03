@@ -151,7 +151,7 @@ modprobe_block_active() {
       found=0
     fi
   fi
-  grep -RhsE "^[[:space:]]*install[[:space:]]+$MODULE[[:space:]]+(/bin/false|/usr/bin/false|false)" /etc/modprobe.d /run/modprobe.d /lib/modprobe.d /usr/lib/modprobe.d >/dev/null 2>&1 && found=0
+  grep -RhsE "^[[:space:]]*install[[:space:]]+${MODULE}[[:space:]]+(/bin/false|/usr/bin/false|false)" /etc/modprobe.d /run/modprobe.d /lib/modprobe.d /usr/lib/modprobe.d >/dev/null 2>&1 && found=0
   return "$found"
 }
 
