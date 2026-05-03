@@ -29,6 +29,8 @@ CopyFail Guard helps operators reduce exposure to the Linux `algif_aead` / `AF_A
 
 ## Quick start
 
+Clone-and-run:
+
 ```bash
 git clone https://github.com/juliosuas/copyfail-guard.git
 cd copyfail-guard
@@ -37,6 +39,15 @@ chmod +x bin/copyfail-guard.sh
 sudo ./bin/copyfail-guard.sh status
 sudo ./bin/copyfail-guard.sh mitigate --yes
 sudo ./bin/copyfail-guard.sh verify
+```
+
+Optional system install:
+
+```bash
+git clone https://github.com/juliosuas/copyfail-guard.git
+cd copyfail-guard
+sudo ./scripts/install.sh
+sudo copyfail-guard status
 ```
 
 Container / CI hardening:
@@ -225,6 +236,13 @@ It may affect applications explicitly configured to use the AF_ALG engine or app
 sudo lsof | grep AF_ALG || true
 ss -xa | grep -i alg || true
 ```
+
+## Operator documentation
+
+- [Incident response runbook](docs/incident-response-runbook.md)
+- [Seccomp validation notes](docs/seccomp-validation.md)
+- [Security policy](SECURITY.md)
+- [Changelog](CHANGELOG.md)
 
 ## Limitations
 

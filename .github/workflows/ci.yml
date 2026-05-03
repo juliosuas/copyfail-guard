@@ -13,7 +13,7 @@ jobs:
       - name: Install ShellCheck
         run: sudo apt-get update && sudo apt-get install -y shellcheck
       - name: ShellCheck
-        run: shellcheck bin/copyfail-guard.sh tests/ci-smoke.sh
+        run: shellcheck bin/copyfail-guard.sh tests/ci-smoke.sh scripts/install.sh
 
   smoke:
     name: smoke (${{ matrix.image }})
