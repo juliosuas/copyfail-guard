@@ -42,6 +42,7 @@ Options:
   --dry-run              Show what would change without writing system files
   --yes                  Non-interactive confirmation for mitigate/rollback
   --no-logo              Do not print ASCII banner
+  --json                 Emit JSON for supported commands: assess, doctor
 
 Examples:
   sudo ./bin/copyfail-guard.sh assess
@@ -170,39 +171,73 @@ check_afalg_users() {
 }
 
 doctor() {
+  if [[ "${OUTPUT_JSON:-0}" == "1" ]]; then
+    local failed=0
+    local required_missing=()
+    local host_missing=()
+    local optional_missing_cmds=()
+    for cmd in bash grep awk mktemp install uname; do command -v "$cmd" >/dev/null 2>&1 || { required_missing+=("$cmd"); failed=1; }; done
+    for cmd in modinfo modprobe lsmod rmmod; do command -v "$cmd" >/dev/null 2>&1 || host_missing+=("$cmd"); done
+    for cmd in python3 lsof ss docker podman; do command -v "$cmd" >/dev/null 2>&1 || optional_missing_cmds+=("$cmd"); done
+    python3 - "$failed" "$(uname -s 2>/dev/null || echo unknown)" "${required_missing[*]-}" "${host_missing[*]-}" "${optional_missing_cmds[*]-}" <<'PY'
+import json, sys
+failed=int(sys.argv[1])
+print(json.dumps({
+  "tool": "copyfail-guard",
+  "command": "doctor",
+  "ready": failed == 0,
+  "os": sys.argv[2],
+  "required_missing": sys.argv[3].split() if sys.argv[3] else [],
+  "host_tool_missing": sys.argv[4].split() if sys.argv[4] else [],
+  "optional_missing": sys.argv[5].split() if sys.argv[5] else []
+}, indent=2))
+PY
+    return "$failed"
+  fi
   print_banner
   local failed=0
   local optional_missing=0
+  local required_missing=()
+  local host_missing=()
+  local optional_missing_cmds=()
+
   printf "%bRequired:%b\n" "$BOLD" "$NC"
   for cmd in bash grep awk mktemp install uname; do
     if command -v "$cmd" >/dev/null 2>&1; then
       log "$cmd found: $(command -v "$cmd")"
     else
       err "$cmd missing"
+      required_missing+=("$cmd")
       failed=1
     fi
   done
+
   printf "\n%bLinux host tools:%b\n" "$BOLD" "$NC"
   for cmd in modinfo modprobe lsmod rmmod; do
     if command -v "$cmd" >/dev/null 2>&1; then
       log "$cmd found: $(command -v "$cmd")"
     else
       warn "$cmd missing (host mitigation/status may be limited)"
+      host_missing+=("$cmd")
       optional_missing=1
     fi
   done
+
   printf "\n%bOptional:%b\n" "$BOLD" "$NC"
   for cmd in python3 lsof ss docker podman; do
     if command -v "$cmd" >/dev/null 2>&1; then
       log "$cmd found: $(command -v "$cmd")"
     else
       warn "$cmd missing (optional feature may be unavailable)"
+      optional_missing_cmds+=("$cmd")
       optional_missing=1
     fi
   done
+
   if [[ "$(uname -s 2>/dev/null || true)" != "Linux" ]]; then
     warn "Current OS is $(uname -s 2>/dev/null || echo unknown). Host mitigation commands require Linux; seccomp profile generation can still be used."
   fi
+
   if [[ "$failed" -eq 0 ]]; then
     printf "\n%bDoctor verdict:%b ready" "$GREEN$BOLD" "$NC"
     [[ "$optional_missing" -eq 1 ]] && printf " with optional limitations"
@@ -213,15 +248,17 @@ doctor() {
 
 assess() {
   need_linux
-  print_banner
+  [[ "${OUTPUT_JSON:-0}" == "1" ]] || print_banner
   local verdict="UNKNOWN"
   local code=20
   local reasons=()
   local actions=()
 
-  info "Safe assessment mode: no exploit attempt, no page-cache writes, no privilege escalation."
-  info "This evaluates exposure and mitigation controls; only vendor patch + reboot resolves the CVE."
-  printf "\n"
+  if [[ "${OUTPUT_JSON:-0}" != "1" ]]; then
+    info "Safe assessment mode: no exploit attempt, no page-cache writes, no privilege escalation."
+    info "This evaluates exposure and mitigation controls; only vendor patch + reboot resolves the CVE."
+    printf "\n"
+  fi
 
   if module_builtin; then
     verdict="EXPOSED_BUILTIN_REBOOT_REQUIRED"
@@ -269,13 +306,35 @@ assess() {
     fi
   fi
 
-  printf "%bVerdict:%b %s\n" "$BOLD" "$NC" "$verdict"
-  printf "%bExit code:%b %s\n" "$BOLD" "$NC" "$code"
-  printf "\n%bReasons:%b\n" "$BOLD" "$NC"
-  for r in "${reasons[@]}"; do printf "  - %s\n" "$r"; done
-  printf "\n%bNext actions:%b\n" "$BOLD" "$NC"
-  for a in "${actions[@]}"; do printf "  - %s\n" "$a"; done
-  printf "\n%bReminder:%b CopyFail Guard mitigates exposure. The durable resolution is patched kernel + reboot.\n" "$YELLOW$BOLD" "$NC"
+  if [[ "${OUTPUT_JSON:-0}" == "1" ]]; then
+    local reasons_json actions_json
+    reasons_json="$(printf '%s\n' "${reasons[@]-}" | python3 -c 'import json,sys; print(json.dumps([line.rstrip("\\n") for line in sys.stdin if line.rstrip("\\n")]))')"
+    actions_json="$(printf '%s\n' "${actions[@]-}" | python3 -c 'import json,sys; print(json.dumps([line.rstrip("\\n") for line in sys.stdin if line.rstrip("\\n")]))')"
+    python3 - "$verdict" "$code" "$reasons_json" "$actions_json" <<'PY'
+import json, sys
+print(json.dumps({
+  "tool": "copyfail-guard",
+  "command": "assess",
+  "cve": "CVE-2026-31431",
+  "module": "algif_aead",
+  "verdict": sys.argv[1],
+  "exit_code": int(sys.argv[2]),
+  "safe_assessment": True,
+  "exploit_attempted": False,
+  "final_resolution": "vendor patched kernel + reboot",
+  "reasons": json.loads(sys.argv[3]),
+  "next_actions": json.loads(sys.argv[4])
+}, indent=2))
+PY
+  else
+    printf "%bVerdict:%b %s\n" "$BOLD" "$NC" "$verdict"
+    printf "%bExit code:%b %s\n" "$BOLD" "$NC" "$code"
+    printf "\n%bReasons:%b\n" "$BOLD" "$NC"
+    for r in "${reasons[@]-}"; do printf "  - %s\n" "$r"; done
+    printf "\n%bNext actions:%b\n" "$BOLD" "$NC"
+    for a in "${actions[@]-}"; do printf "  - %s\n" "$a"; done
+    printf "\n%bReminder:%b CopyFail Guard mitigates exposure. The durable resolution is patched kernel + reboot.\n" "$YELLOW$BOLD" "$NC"
+  fi
   return "$code"
 }
 
@@ -556,13 +615,14 @@ EOF
 
 main() {
   local cmd=""
-  DRY_RUN=0; ASSUME_YES=0; NO_LOGO=0
+  DRY_RUN=0; ASSUME_YES=0; NO_LOGO=0; OUTPUT_JSON=0
   local positional=()
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --dry-run) DRY_RUN=1 ;;
       --yes|-y) ASSUME_YES=1 ;;
       --no-logo) NO_LOGO=1 ;;
+      --json) OUTPUT_JSON=1; NO_LOGO=1 ;;
       -h|--help) cmd="help" ;;
       assess|status|doctor|mitigate|verify|rollback|seccomp-docker|seccomp-patch|k8s-example|version|help)
         if [[ -z "$cmd" ]]; then cmd="$1"; else positional+=("$1"); fi ;;

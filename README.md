@@ -125,6 +125,13 @@ Instead, `assess` performs a safe operational check:
 - recommends host mitigation, seccomp, or patch/reboot
 - returns exit codes for fleet automation
 
+Automation JSON:
+
+```bash
+sudo ./bin/copyfail-guard.sh assess --json
+./bin/copyfail-guard.sh doctor --json
+```
+
 Exit codes:
 
 | Code | Meaning |
@@ -245,6 +252,7 @@ Flags can be placed before or after the command:
 --dry-run      Show planned changes without writing files or unloading modules
 --yes          Non-interactive confirmation
 --no-logo      Disable ASCII banner
+--json         Emit JSON for supported commands: assess, doctor
 ```
 
 ## What should not break

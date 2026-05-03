@@ -59,3 +59,14 @@ Then validate with the non-exploit socket reachability test:
 ```bash
 python3 tools/afalg-socket-test.py
 ```
+
+## JSON output
+
+For fleet automation and SIEM/change-management capture:
+
+```bash
+copyfail-guard assess --json
+copyfail-guard doctor --json
+```
+
+`assess --json` includes `safe_assessment: true`, `exploit_attempted: false`, the verdict, exit code, reasons, next actions, and the final-resolution reminder.

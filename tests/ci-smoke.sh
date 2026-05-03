@@ -9,6 +9,9 @@ grep -q 'doctor' /tmp/cfg-help.txt
 bin/copyfail-guard.sh --no-logo version | grep -q '0.2.0'
 bin/copyfail-guard.sh --no-logo doctor >/tmp/cfg-doctor.txt 2>&1 || true
 grep -q 'Doctor verdict' /tmp/cfg-doctor.txt
+bin/copyfail-guard.sh doctor --json >/tmp/cfg-doctor.json 2>/tmp/cfg-doctor.err || true
+python3 -m json.tool /tmp/cfg-doctor.json >/dev/null
+grep -q '"command": "doctor"' /tmp/cfg-doctor.json
 
 bin/copyfail-guard.sh --no-logo seccomp-docker /tmp/copyfail-emergency.json >/tmp/cfg-seccomp.txt
 python3 -m json.tool /tmp/copyfail-emergency.json >/dev/null

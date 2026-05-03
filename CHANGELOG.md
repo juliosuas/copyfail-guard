@@ -3,6 +3,7 @@
 ## v0.2.0 - Safe assessment and UX release
 
 - Added `assess` for non-exploit exposure assessment with clear verdicts, next actions, and fleet-friendly exit codes.
+- Added `--json` output for `assess` and `doctor` to support fleet automation, SIEM capture, and change-management evidence.
 - Added `doctor` to check required and optional dependencies before incident-response work.
 - Added `version` command.
 - Documented why the project does not ship an exploit proof of concept.
