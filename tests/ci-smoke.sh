@@ -4,7 +4,11 @@ cd "$(dirname "$0")/.."
 
 bash -n bin/copyfail-guard.sh
 bin/copyfail-guard.sh --no-logo help >/tmp/cfg-help.txt
-grep -q 'CopyFail Guard' /tmp/cfg-help.txt || grep -q 'copyfail-guard' /tmp/cfg-help.txt
+grep -q 'assess' /tmp/cfg-help.txt
+grep -q 'doctor' /tmp/cfg-help.txt
+bin/copyfail-guard.sh --no-logo version | grep -q '0.2.0'
+bin/copyfail-guard.sh --no-logo doctor >/tmp/cfg-doctor.txt 2>&1 || true
+grep -q 'Doctor verdict' /tmp/cfg-doctor.txt
 
 bin/copyfail-guard.sh --no-logo seccomp-docker /tmp/copyfail-emergency.json >/tmp/cfg-seccomp.txt
 python3 -m json.tool /tmp/copyfail-emergency.json >/dev/null

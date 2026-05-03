@@ -15,10 +15,11 @@
           /_/    /____/
 ```
 
-**Fast, auditable Linux mitigation for CVE-2026-31431 “Copy Fail” while kernels get patched.**
+**Fast, auditable Linux exposure assessment and mitigation for CVE-2026-31431 “Copy Fail” while kernels get patched.**
 
 CopyFail Guard helps operators reduce exposure to the Linux `algif_aead` / `AF_ALG` issue by:
 
+- safely assessing exposure without exploit code
 - checking whether `algif_aead` is available, loaded, built-in, or already blocked
 - installing a persistent `modprobe.d` block and unloading the module when safe
 - adding an AF_ALG-deny rule to Docker, Podman, and Kubernetes seccomp profiles
@@ -36,7 +37,8 @@ git clone https://github.com/juliosuas/copyfail-guard.git
 cd copyfail-guard
 chmod +x bin/copyfail-guard.sh
 
-sudo ./bin/copyfail-guard.sh status
+sudo ./bin/copyfail-guard.sh doctor
+sudo ./bin/copyfail-guard.sh assess
 sudo ./bin/copyfail-guard.sh mitigate --yes
 sudo ./bin/copyfail-guard.sh verify
 ```
@@ -83,6 +85,8 @@ The correct fix is a vendor kernel update containing the upstream revert/fix and
 
 | Area | Command | Purpose |
 |---|---|---|
+| Safe assessment | `assess` | Give a non-exploit exposure verdict, next actions, and automation-friendly exit code |
+| Dependency check | `doctor` | Check required/optional tools and explain runtime limitations |
 | Host inspection | `status` | Show OS/kernel, module availability, loaded state, built-in warning, modprobe block, and obvious AF_ALG consumers |
 | Host mitigation | `mitigate` | Write `/etc/modprobe.d/99-copyfail-guard.conf` and attempt to unload `algif_aead` |
 | Verification | `verify` | Fail clearly if the module is loaded, built-in, or not blocked |
@@ -109,6 +113,28 @@ Seccomp profile patching:
 - `python3` is required for `seccomp-patch`
 
 No exploit code, compiler, kernel headers, or third-party packages are required.
+
+## Safe assessment vs proof of concept
+
+CopyFail Guard does **not** include an exploit proof of concept. That is intentional. A real Copy Fail exploit check would need to exercise dangerous kernel behavior and validate a write primitive or privilege impact, which is not appropriate for a public defensive tool.
+
+Instead, `assess` performs a safe operational check:
+
+- detects whether `algif_aead` appears available, loaded, built-in, or blocked
+- distinguishes “interim mitigated” from “actually resolved”
+- recommends host mitigation, seccomp, or patch/reboot
+- returns exit codes for fleet automation
+
+Exit codes:
+
+| Code | Meaning |
+|---|---|
+| `0` | Low obvious exposure from local checks |
+| `1` | Interim mitigation active, patch/reboot still required |
+| `10` | Exposed/mitigation available |
+| `11` | Partially mitigated; reboot or unload needed |
+| `12` | Built-in module path; patch/reboot required |
+| `20` | Unknown assessment state |
 
 ## Host mitigation details
 
@@ -202,7 +228,9 @@ Results:
 ## Commands
 
 ```text
+copyfail-guard assess                 Safe exposure assessment, no exploit attempt
 copyfail-guard status                 Inspect host exposure indicators
+copyfail-guard doctor                 Check dependencies and runtime readiness
 copyfail-guard mitigate               Disable algif_aead persistently and unload it
 copyfail-guard verify                 Verify host mitigation is active
 copyfail-guard rollback               Remove CopyFail Guard's modprobe mitigation
@@ -243,6 +271,16 @@ ss -xa | grep -i alg || true
 - [Seccomp validation notes](docs/seccomp-validation.md)
 - [Security policy](SECURITY.md)
 - [Changelog](CHANGELOG.md)
+
+## Usability rating
+
+Current target audience: Linux sysadmins, DevSecOps engineers, platform teams, and incident responders.
+
+- Installation friction: low. Clone-and-run requires no package manager beyond standard Linux tooling; `python3` is only needed for `seccomp-patch`.
+- Operator UX: high. `doctor`, `assess`, `mitigate`, `verify`, and `rollback` map to an incident-response flow.
+- Casual-user UX: medium. This is kernel/container hardening; the tool keeps language direct, but the domain still requires Linux administration judgment.
+
+Resolution rating: mitigation, not cure. The tool reduces exposure and verifies controls; vendor kernel update + reboot is the final resolution.
 
 ## Limitations
 

@@ -10,6 +10,7 @@ CVE="CVE-2026-31431"
 MODULE="algif_aead"
 MODPROBE_CONF="/etc/modprobe.d/99-copyfail-guard.conf"
 DEFAULT_SECCOMP_OUT="./copyfail-afalg-seccomp.json"
+VERSION="0.2.0"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; BOLD='\033[1m'; NC='\033[0m'
 NO_COLOR="${NO_COLOR:-}"
@@ -25,13 +26,16 @@ usage() {
 Usage: copyfail-guard <command> [options]
 
 Commands:
+  assess                 Safe exposure assessment with machine-friendly exit codes
   status                 Inspect host exposure indicators for CVE-2026-31431
+  doctor                 Check local dependencies and runtime readiness
   mitigate               Persistently disable algif_aead and unload it if loaded
   verify                 Verify mitigation is active
   rollback               Remove CopyFail Guard modprobe mitigation
   seccomp-docker [FILE]  Generate emergency AF_ALG-deny seccomp profile
   seccomp-patch BASE OUT Patch an existing seccomp profile to deny AF_ALG
   k8s-example            Print Kubernetes seccomp usage example
+  version                Print version
   help                   Show this help
 
 Options:
@@ -40,6 +44,7 @@ Options:
   --no-logo              Do not print ASCII banner
 
 Examples:
+  sudo ./bin/copyfail-guard.sh assess
   sudo ./bin/copyfail-guard.sh status
   sudo ./bin/copyfail-guard.sh mitigate --yes
   ./bin/copyfail-guard.sh seccomp-patch docker-default.json copyfail-seccomp.json
@@ -47,6 +52,7 @@ Examples:
 
 Notes:
   - This is a mitigation helper, not an exploit checker.
+  - assess is a safe exposure check; it does not attempt exploitation.
   - Patch and reboot remain the correct final fix.
   - Blocking algif_aead should not affect LUKS/dm-crypt, SSH, OpenSSL defaults,
     kTLS, IPsec/XFRM, or normal in-kernel crypto consumers.
@@ -161,6 +167,120 @@ check_afalg_users() {
   elif command -v ss >/dev/null 2>&1; then
     ss -xa 2>/dev/null | grep -i 'alg' || true
   fi
+}
+
+doctor() {
+  print_banner
+  local failed=0
+  local optional_missing=0
+  printf "%bRequired:%b\n" "$BOLD" "$NC"
+  for cmd in bash grep awk mktemp install uname; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+      log "$cmd found: $(command -v "$cmd")"
+    else
+      err "$cmd missing"
+      failed=1
+    fi
+  done
+  printf "\n%bLinux host tools:%b\n" "$BOLD" "$NC"
+  for cmd in modinfo modprobe lsmod rmmod; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+      log "$cmd found: $(command -v "$cmd")"
+    else
+      warn "$cmd missing (host mitigation/status may be limited)"
+      optional_missing=1
+    fi
+  done
+  printf "\n%bOptional:%b\n" "$BOLD" "$NC"
+  for cmd in python3 lsof ss docker podman; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+      log "$cmd found: $(command -v "$cmd")"
+    else
+      warn "$cmd missing (optional feature may be unavailable)"
+      optional_missing=1
+    fi
+  done
+  if [[ "$(uname -s 2>/dev/null || true)" != "Linux" ]]; then
+    warn "Current OS is $(uname -s 2>/dev/null || echo unknown). Host mitigation commands require Linux; seccomp profile generation can still be used."
+  fi
+  if [[ "$failed" -eq 0 ]]; then
+    printf "\n%bDoctor verdict:%b ready" "$GREEN$BOLD" "$NC"
+    [[ "$optional_missing" -eq 1 ]] && printf " with optional limitations"
+    printf ".\n"
+  fi
+  return "$failed"
+}
+
+assess() {
+  need_linux
+  print_banner
+  local verdict="UNKNOWN"
+  local code=20
+  local reasons=()
+  local actions=()
+
+  info "Safe assessment mode: no exploit attempt, no page-cache writes, no privilege escalation."
+  info "This evaluates exposure and mitigation controls; only vendor patch + reboot resolves the CVE."
+  printf "\n"
+
+  if module_builtin; then
+    verdict="EXPOSED_BUILTIN_REBOOT_REQUIRED"
+    code=12
+    reasons+=("$MODULE appears built into this kernel; modprobe.d/rmmod cannot disable it")
+    actions+=("Install vendor patched kernel and reboot")
+    actions+=("Use seccomp to deny socket(AF_ALG) for untrusted containers/CI while patching")
+  elif module_available; then
+    if module_loaded; then
+      if modprobe_block_active; then
+        verdict="PARTIALLY_MITIGATED_REBOOT_RECOMMENDED"
+        code=11
+        reasons+=("$MODULE is loaded even though a persistent block is present")
+        actions+=("Reboot or stop AF_ALG consumers and unload $MODULE")
+      else
+        verdict="EXPOSED_MITIGATION_AVAILABLE"
+        code=10
+        reasons+=("$MODULE is available and currently loaded")
+        actions+=("Run: sudo $0 mitigate --yes")
+      fi
+    else
+      if modprobe_block_active; then
+        verdict="INTERIM_MITIGATED_PATCH_STILL_REQUIRED"
+        code=1
+        reasons+=("$MODULE is available but not loaded, and persistent modprobe block is active")
+        actions+=("Keep patch/reboot plan; mitigation is not a permanent fix")
+      else
+        verdict="EXPOSED_AUTOLOAD_POSSIBLE"
+        code=10
+        reasons+=("$MODULE is available and can likely be autoloaded")
+        actions+=("Run: sudo $0 mitigate --yes")
+      fi
+    fi
+  else
+    if modprobe_block_active; then
+      verdict="LOW_OBVIOUS_EXPOSURE_BLOCK_PRESENT"
+      code=0
+      reasons+=("$MODULE is not available via modinfo and a persistent block is present")
+      actions+=("Confirm vendor patch status through fleet inventory")
+    else
+      verdict="LOW_OBVIOUS_EXPOSURE_UNCONFIRMED_PATCH_STATUS"
+      code=0
+      reasons+=("$MODULE is not available via modinfo")
+      actions+=("Confirm vendor patch status; absence of this module is not proof of patched kernel")
+    fi
+  fi
+
+  printf "%bVerdict:%b %s\n" "$BOLD" "$NC" "$verdict"
+  printf "%bExit code:%b %s\n" "$BOLD" "$NC" "$code"
+  printf "\n%bReasons:%b\n" "$BOLD" "$NC"
+  for r in "${reasons[@]}"; do printf "  - %s\n" "$r"; done
+  printf "\n%bNext actions:%b\n" "$BOLD" "$NC"
+  for a in "${actions[@]}"; do printf "  - %s\n" "$a"; done
+  printf "\n%bReminder:%b CopyFail Guard mitigates exposure. The durable resolution is patched kernel + reboot.\n" "$YELLOW$BOLD" "$NC"
+  return "$code"
+}
+
+version() {
+  printf 'CopyFail Guard %s\n' "$VERSION"
 }
 
 status() {
@@ -444,7 +564,7 @@ main() {
       --yes|-y) ASSUME_YES=1 ;;
       --no-logo) NO_LOGO=1 ;;
       -h|--help) cmd="help" ;;
-      status|mitigate|verify|rollback|seccomp-docker|seccomp-patch|k8s-example|help)
+      assess|status|doctor|mitigate|verify|rollback|seccomp-docker|seccomp-patch|k8s-example|version|help)
         if [[ -z "$cmd" ]]; then cmd="$1"; else positional+=("$1"); fi ;;
       *) positional+=("$1") ;;
     esac
@@ -458,13 +578,16 @@ main() {
   fi
 
   case "$cmd" in
+    assess) assess ;;
     status) status ;;
+    doctor) doctor ;;
     mitigate) mitigate ;;
     verify) verify ;;
     rollback) rollback ;;
     seccomp-docker) generate_seccomp "${1:-$DEFAULT_SECCOMP_OUT}" ;;
     seccomp-patch) patch_seccomp "${1:-}" "${2:-}" ;;
     k8s-example) k8s_example ;;
+    version) version ;;
     help|--help|-h) print_banner; usage ;;
     *) err "Unknown command: $cmd"; usage; exit 64 ;;
   esac
