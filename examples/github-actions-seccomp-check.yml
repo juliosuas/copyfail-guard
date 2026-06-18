@@ -1,3 +1,5 @@
+# Copy this file to .github/workflows/copyfail-seccomp-check.yml in the
+# repository that owns copyfail-seccomp.json.
 name: Validate CopyFail seccomp profile
 
 on:
@@ -16,8 +18,19 @@ jobs:
         run: python3 -m json.tool copyfail-seccomp.json >/dev/null
       - name: Confirm AF_ALG is blocked in container
         run: |
-          docker run --rm \
-            --security-opt seccomp="$PWD/copyfail-seccomp.json" \
-            -v "$PWD/tools:/tools:ro" \
-            python:3.12-alpine \
-            python /tools/afalg-socket-test.py
+          set +e
+          output="$(
+            docker run --rm \
+              --security-opt seccomp="$PWD/copyfail-seccomp.json" \
+              -v "$PWD/tools:/tools:ro" \
+              python:3.12-alpine \
+              python /tools/afalg-socket-test.py
+          )"
+          exit_code=$?
+          set -e
+          printf '%s\n' "$output"
+          if [ "$exit_code" -eq 0 ] && printf '%s\n' "$output" | grep -q '^BLOCKED:'; then
+            exit 0
+          fi
+          printf 'Expected AF_ALG to be blocked; afalg-socket-test.py exited %s\n' "$exit_code" >&2
+          exit 1

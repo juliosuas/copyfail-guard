@@ -16,6 +16,8 @@ grep -q '"command": "doctor"' /tmp/cfg-doctor.json
 grep -Fq "| \`10\` | AF_ALG socket creation was permitted |" docs/seccomp-validation.md
 grep -q 'sys.exit(10)' tools/afalg-socket-test.py
 grep -q 'COPYFAIL_GUARD_REF' scripts/install.sh
+grep -q 'Expected AF_ALG to be blocked' examples/github-actions-seccomp-check.yml
+grep -q "grep -q '^BLOCKED:'" examples/github-actions-seccomp-check.yml
 
 bin/copyfail-guard.sh --no-logo seccomp-docker /tmp/copyfail-emergency.json >/tmp/cfg-seccomp.txt
 python3 -m json.tool /tmp/copyfail-emergency.json >/dev/null
