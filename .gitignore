@@ -1,3 +1,6 @@
 copyfail-afalg-seccomp.json
+copyfail-seccomp.json
+*.pyc
+__pycache__/
 *.log
 .DS_Store
