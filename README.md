@@ -57,10 +57,10 @@ sudo ./bin/copyfail-guard.sh verify
 For repeatable installs, pin a release tag:
 
 ```bash
-git clone --branch v0.2.0 --depth 1 https://github.com/juliosuas/copyfail-guard.git
+git clone --branch v0.3.0 --depth 1 https://github.com/juliosuas/copyfail-guard.git
 ```
 
-Replace `v0.2.0` with the latest tagged release when newer releases are available.
+Replace `v0.3.0` with the latest tagged release when newer releases are available.
 
 
 ## Am I affected?
@@ -136,7 +136,7 @@ sudo copyfail-guard status
 The installer supports pinning the source and destination for controlled rollouts:
 
 ```bash
-sudo env COPYFAIL_GUARD_REF=v0.2.0 ./scripts/install.sh
+sudo env COPYFAIL_GUARD_REF=v0.3.0 ./scripts/install.sh
 ```
 
 Use the latest tagged release for `COPYFAIL_GUARD_REF` when newer releases are available.
