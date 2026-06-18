@@ -9,6 +9,8 @@
 - Added `COPYFAIL_GUARD_REF` support to `scripts/install.sh` for pinned installs.
 - Aligned seccomp validation documentation with `tools/afalg-socket-test.py` exit code `10` for permitted AF_ALG socket creation.
 - Made the GitHub Actions seccomp validation example explicitly require `BLOCKED` output plus exit code `0`.
+- Added community validation docs and a compatibility-report issue template to encourage reproducible field reports.
+- Ignored local agent skill installs so `.agents/` and `skills-lock.json` do not get committed accidentally.
 
 ## v0.2.0 - Safe assessment and UX release
 

@@ -2,5 +2,7 @@ copyfail-afalg-seccomp.json
 copyfail-seccomp.json
 *.pyc
 __pycache__/
+.agents/
+skills-lock.json
 *.log
 .DS_Store
