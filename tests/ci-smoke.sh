@@ -6,8 +6,8 @@ bash -n bin/copyfail-guard.sh
 bin/copyfail-guard.sh --no-logo help >/tmp/cfg-help.txt
 grep -q 'assess' /tmp/cfg-help.txt
 grep -q 'doctor' /tmp/cfg-help.txt
-bin/copyfail-guard.sh --no-logo version | grep -q '0.2.0'
-bin/copyfail-guard.sh --version | grep -q '0.2.0'
+bin/copyfail-guard.sh --no-logo version | grep -q '0.3.0'
+bin/copyfail-guard.sh --version | grep -q '0.3.0'
 bin/copyfail-guard.sh --no-logo doctor >/tmp/cfg-doctor.txt 2>&1 || true
 grep -q 'Doctor verdict' /tmp/cfg-doctor.txt
 bin/copyfail-guard.sh doctor --json >/tmp/cfg-doctor.json 2>/tmp/cfg-doctor.err || true

@@ -10,7 +10,7 @@ CVE="CVE-2026-31431"
 MODULE="algif_aead"
 MODPROBE_CONF="/etc/modprobe.d/99-copyfail-guard.conf"
 DEFAULT_SECCOMP_OUT="./copyfail-afalg-seccomp.json"
-VERSION="0.2.0"
+VERSION="0.3.0"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; CYAN='\033[0;36m'; MAGENTA='\033[0;35m'; DIM='\033[2m'; BOLD='\033[1m'; NC='\033[0m'
 NO_COLOR="${NO_COLOR:-}"
