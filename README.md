@@ -60,6 +60,8 @@ For repeatable installs, pin a release tag:
 git clone --branch v0.2.0 --depth 1 https://github.com/juliosuas/copyfail-guard.git
 ```
 
+Replace `v0.2.0` with the latest tagged release when newer releases are available.
+
 
 ## Am I affected?
 
@@ -137,6 +139,8 @@ The installer supports pinning the source and destination for controlled rollout
 sudo env COPYFAIL_GUARD_REF=v0.2.0 ./scripts/install.sh
 ```
 
+Use the latest tagged release for `COPYFAIL_GUARD_REF` when newer releases are available.
+
 Container / CI hardening:
 
 ```bash
@@ -159,6 +163,8 @@ Expected protected result:
 ```text
 BLOCKED: socket(AF_ALG) denied by policy (...)
 ```
+
+See [Sample outputs](docs/sample-outputs.md) for expected verdicts, JSON shape, and container validation results.
 
 ## Why this matters
 
@@ -376,6 +382,8 @@ ss -xa | grep -i alg || true
 - [Incident response runbook](docs/incident-response-runbook.md)
 - [Fleet rollout guide](docs/fleet-rollout.md)
 - [Community validation guide](docs/community-validation.md)
+- [Sample outputs](docs/sample-outputs.md)
+- [Release checklist](docs/release-checklist.md)
 - [Seccomp validation notes](docs/seccomp-validation.md)
 - [Safe assessment model](docs/safe-assessment.md)
 - [Security policy](SECURITY.md)

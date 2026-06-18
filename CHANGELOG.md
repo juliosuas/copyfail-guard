@@ -11,6 +11,8 @@
 - Made the GitHub Actions seccomp validation example explicitly require `BLOCKED` output plus exit code `0`.
 - Added community validation docs and a compatibility-report issue template to encourage reproducible field reports.
 - Ignored local agent skill installs so `.agents/` and `skills-lock.json` do not get committed accidentally.
+- Added sample output and release checklist documentation to make adoption and tagged releases easier to verify.
+- Hardened CI with run concurrency, job timeouts, and non-interactive openSUSE GPG key handling.
 
 ## v0.2.0 - Safe assessment and UX release
 
