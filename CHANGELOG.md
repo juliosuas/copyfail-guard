@@ -8,6 +8,7 @@
 - Added `--version` alias for easier scripting.
 - Added `COPYFAIL_GUARD_REF` support to `scripts/install.sh` for pinned installs.
 - Aligned seccomp validation documentation with `tools/afalg-socket-test.py` exit code `10` for permitted AF_ALG socket creation.
+- Made the GitHub Actions seccomp validation example explicitly require `BLOCKED` output plus exit code `0`.
 
 ## v0.2.0 - Safe assessment and UX release
 
