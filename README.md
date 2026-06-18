@@ -317,6 +317,19 @@ Results:
 - `PERMITTED` means AF_ALG socket creation is still allowed for that process.
 - `UNSUPPORTED` means AF_ALG is unavailable in that runtime.
 
+## Community validation
+
+CopyFail Guard needs real-world compatibility reports from Linux hosts, container runtimes, CI runners, and Kubernetes nodes. If you can safely test it, open a **Compatibility report** issue with sanitized `doctor`, `assess --json`, `verify`, or AF_ALG socket-test output.
+
+Useful reports help answer:
+
+- which distro/kernel/runtime combinations are easy to mitigate
+- where `algif_aead` is built in and requires patch/reboot only
+- which seccomp baselines need runtime-specific notes
+- whether docs are clear enough for incident-response use
+
+See [Community validation guide](docs/community-validation.md).
+
 ## Commands
 
 ```text
@@ -362,6 +375,7 @@ ss -xa | grep -i alg || true
 
 - [Incident response runbook](docs/incident-response-runbook.md)
 - [Fleet rollout guide](docs/fleet-rollout.md)
+- [Community validation guide](docs/community-validation.md)
 - [Seccomp validation notes](docs/seccomp-validation.md)
 - [Safe assessment model](docs/safe-assessment.md)
 - [Security policy](SECURITY.md)
@@ -374,6 +388,7 @@ ss -xa | grep -i alg || true
 - Current scope: defensive assessment, host mitigation for modular `algif_aead`, seccomp hardening for untrusted workloads, and rollback.
 - Supported user: operators comfortable with Linux host and container hardening.
 - Release style: tagged releases, changelog entries, GitHub Actions smoke tests, and issue templates for reproducible reports.
+- Community signal: compatibility reports are the strongest trust signal; field evidence can become docs, tests, and examples.
 - Stability promise: avoid exploit behavior, keep host writes narrow, document exit-code semantics, and preserve existing runtime seccomp baselines.
 
 ## Limitations

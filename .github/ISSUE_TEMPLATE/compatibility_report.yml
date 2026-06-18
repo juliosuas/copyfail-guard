@@ -1,0 +1,70 @@
+name: Compatibility report
+description: Share safe host or runtime validation results for CopyFail Guard.
+title: "[Compat]: "
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping build a public compatibility record. Do not include exploit payloads, secrets, hostnames, internal IPs, or sensitive workload names.
+  - type: input
+    id: copyfail_version
+    attributes:
+      label: CopyFail Guard version or commit
+      placeholder: v0.2.0 or commit SHA
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: Ubuntu 24.04, Debian 12, Fedora, EKS node, GitHub Actions runner, etc.
+    validations:
+      required: true
+  - type: input
+    id: kernel
+    attributes:
+      label: Kernel and architecture
+      placeholder: 6.8.0-xx-generic x86_64
+  - type: dropdown
+    id: validation_type
+    attributes:
+      label: Validation type
+      options:
+        - Host assess only
+        - Host mitigation and verify
+        - Docker seccomp
+        - Podman seccomp
+        - Kubernetes seccomp
+        - CI runner seccomp
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: commands
+    attributes:
+      label: Commands run
+      description: Include only safe assessment, mitigation, verify, or seccomp validation commands.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Sanitized output
+      description: Paste sanitized `doctor`, `assess --json`, `verify`, or AF_ALG socket-test output.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Result summary
+      placeholder: EXPOSED_AUTOLOAD_POSSIBLE, INTERIM_MITIGATED_PATCH_STILL_REQUIRED, BLOCKED in Docker, etc.
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes or constraints
+      description: Mention package source, container runtime version, Kubernetes seccomp path, or anything unusual.
