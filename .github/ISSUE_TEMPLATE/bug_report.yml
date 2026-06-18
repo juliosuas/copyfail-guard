@@ -1,0 +1,53 @@
+name: Bug report
+description: Report incorrect behavior in CopyFail Guard.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a reproducible issue. Please do not include exploit payloads.
+  - type: input
+    id: version
+    attributes:
+      label: CopyFail Guard version or commit
+      placeholder: v0.2.0 or commit SHA
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and output
+      description: Paste the exact command and sanitized output.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: host
+    attributes:
+      label: Host details
+      placeholder: distro, kernel release, architecture
+    validations:
+      required: true
+  - type: dropdown
+    id: root
+    attributes:
+      label: Ran as root?
+      options:
+        - "yes"
+        - "no"
+        - "not applicable"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true

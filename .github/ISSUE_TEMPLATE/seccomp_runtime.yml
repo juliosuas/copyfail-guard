@@ -1,0 +1,40 @@
+name: Seccomp runtime question
+description: Ask about Docker, Podman, Kubernetes, or CI seccomp behavior.
+title: "[Seccomp]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for AF_ALG seccomp profile generation, patching, and validation questions.
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime
+      options:
+        - Docker
+        - Podman
+        - Kubernetes
+        - CI runner
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Runtime version
+      placeholder: docker --version, podman --version, Kubernetes version, etc.
+  - type: textarea
+    id: profile
+    attributes:
+      label: Seccomp command/profile context
+      description: Paste sanitized commands or profile snippets. Do not include secrets.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation output
+      description: Include output from tools/afalg-socket-test.py if available.
+      render: text

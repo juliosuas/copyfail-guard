@@ -48,7 +48,8 @@ Validate at least one workload per runtime class:
 | Exit | Meaning |
 |---|---|
 | `0` | AF_ALG socket creation was blocked |
-| `1` | AF_ALG socket creation was permitted |
+| `10` | AF_ALG socket creation was permitted |
 | `2` | AF_ALG is unsupported in this runtime/kernel |
+| `3` | Unexpected socket error; investigate manually |
 
 `0` is the desired result when testing a protected container.

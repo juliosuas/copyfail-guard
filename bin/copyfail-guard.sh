@@ -36,6 +36,7 @@ Commands:
   seccomp-patch BASE OUT Patch an existing seccomp profile to deny AF_ALG
   k8s-example            Print Kubernetes seccomp usage example
   version                Print version
+  --version              Print version
   help                   Show this help
 
 Options:
@@ -625,6 +626,7 @@ main() {
       --no-logo) NO_LOGO=1 ;;
       --json) OUTPUT_JSON=1; NO_LOGO=1 ;;
       -h|--help) cmd="help" ;;
+      --version) cmd="version" ;;
       assess|status|doctor|mitigate|verify|rollback|seccomp-docker|seccomp-patch|k8s-example|version|help)
         if [[ -z "$cmd" ]]; then cmd="$1"; else positional+=("$1"); fi ;;
       *) positional+=("$1") ;;

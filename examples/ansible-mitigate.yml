@@ -1,0 +1,38 @@
+---
+- name: Apply CopyFail Guard host mitigation
+  hosts: linux
+  become: true
+  gather_facts: true
+  vars:
+    copyfail_guard_repo: "https://github.com/juliosuas/copyfail-guard.git"
+    copyfail_guard_ref: "v0.2.0"
+    copyfail_guard_dir: "/opt/copyfail-guard"
+  tasks:
+    - name: Install git
+      ansible.builtin.package:
+        name: git
+        state: present
+
+    - name: Fetch CopyFail Guard
+      ansible.builtin.git:
+        repo: "{{ copyfail_guard_repo }}"
+        dest: "{{ copyfail_guard_dir }}"
+        version: "{{ copyfail_guard_ref }}"
+        depth: 1
+
+    - name: Assess exposure before changing state
+      ansible.builtin.command: "{{ copyfail_guard_dir }}/bin/copyfail-guard.sh --json assess"
+      register: copyfail_assess
+      changed_when: false
+      failed_when: copyfail_assess.rc not in [0, 1, 10, 11, 12, 20]
+
+    - name: Apply host mitigation when exposed and modular
+      ansible.builtin.command: "{{ copyfail_guard_dir }}/bin/copyfail-guard.sh --yes mitigate"
+      register: copyfail_mitigate
+      changed_when: "'Wrote /etc/modprobe.d/99-copyfail-guard.conf' in copyfail_mitigate.stdout"
+      when: copyfail_assess.rc in [10, 11]
+
+    - name: Verify host mitigation
+      ansible.builtin.command: "{{ copyfail_guard_dir }}/bin/copyfail-guard.sh verify"
+      changed_when: false
+      when: copyfail_assess.rc in [1, 10, 11]

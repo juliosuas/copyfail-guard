@@ -1,0 +1,23 @@
+name: Validate CopyFail seccomp profile
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "copyfail-seccomp.json"
+      - ".github/workflows/copyfail-seccomp-check.yml"
+
+jobs:
+  afalg-blocked:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate profile JSON
+        run: python3 -m json.tool copyfail-seccomp.json >/dev/null
+      - name: Confirm AF_ALG is blocked in container
+        run: |
+          docker run --rm \
+            --security-opt seccomp="$PWD/copyfail-seccomp.json" \
+            -v "$PWD/tools:/tools:ro" \
+            python:3.12-alpine \
+            python /tools/afalg-socket-test.py

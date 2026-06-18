@@ -17,7 +17,7 @@
 
 **Fast, auditable Linux exposure assessment and mitigation for CVE-2026-31431 “Copy Fail” while kernels get patched.**
 
-CopyFail Guard helps operators reduce exposure to the Linux `algif_aead` / `AF_ALG` issue by:
+CopyFail Guard is a defensive operations tool for Linux sysadmins, DevSecOps engineers, platform teams, and incident responders. It helps reduce exposure to the Linux `algif_aead` / `AF_ALG` issue by:
 
 - safely assessing exposure without exploit code
 - checking whether `algif_aead` is available, loaded, built-in, or already blocked
@@ -27,6 +27,38 @@ CopyFail Guard helps operators reduce exposure to the Linux `algif_aead` / `AF_A
 
 > Final fix: install your vendor’s patched kernel and reboot.  
 > This tool covers the operational gap between disclosure and full fleet patching.
+
+## Why operators can trust it
+
+- **No exploit code:** checks exposure and AF_ALG reachability without page-cache writes, `splice`, setuid changes, privilege escalation, or destructive probes.
+- **Auditable host change:** host mitigation writes one managed file, `/etc/modprobe.d/99-copyfail-guard.conf`, and rollback removes only that file.
+- **Baseline-preserving seccomp:** `seccomp-patch` adds an AF_ALG denial to an existing Docker/Podman/Kubernetes seccomp profile instead of replacing your runtime hardening.
+- **Automation ready:** `assess --json` and documented exit codes support fleet scans, SIEM capture, and change-management evidence.
+- **CI covered:** shell syntax, seccomp profile generation, JSON output, and smoke tests run across common Linux distro containers.
+
+## 30-second path
+
+If you are on a Linux host and need a quick answer:
+
+```bash
+git clone --depth 1 https://github.com/juliosuas/copyfail-guard.git
+cd copyfail-guard
+sudo ./bin/copyfail-guard.sh doctor
+sudo ./bin/copyfail-guard.sh assess
+```
+
+If the verdict is exposed and `algif_aead` is modular:
+
+```bash
+sudo ./bin/copyfail-guard.sh mitigate --yes
+sudo ./bin/copyfail-guard.sh verify
+```
+
+For repeatable installs, pin a release tag:
+
+```bash
+git clone --branch v0.2.0 --depth 1 https://github.com/juliosuas/copyfail-guard.git
+```
 
 
 ## Am I affected?
@@ -69,13 +101,11 @@ CopyFail Guard proves the things operators can safely act on:
 
 For final vulnerability status, combine this tool with vendor advisory/package inventory and reboot evidence.
 
-## Usability and resolution model
+## Resolution model
 
-This project is built for Linux sysadmins, DevSecOps engineers, platform teams, and incident responders. It is intentionally clone-and-run: no compiler, kernel headers, exploit code, or third-party package manager is required for the core host workflow.
+CopyFail Guard is **mitigation, not cure**. It reduces exposure and verifies interim controls. The durable fix remains vendor patched kernel plus reboot.
 
-Operational UX is high for the intended audience: `doctor`, `assess`, `mitigate`, `verify`, `rollback`, and `--json` map directly to an incident-response flow. Casual-user UX is necessarily medium because this is kernel/container hardening and still requires Linux administration judgment.
-
-Resolution model: **mitigation, not cure**. CopyFail Guard reduces exposure and verifies controls. The durable fix remains vendor patched kernel plus reboot.
+The tool is intentionally clone-and-run for incident response: no compiler, kernel headers, exploit code, or third-party package manager is required for the core host workflow. `python3` is needed for `--json` output, `seccomp-patch`, and the non-exploit AF_ALG socket test.
 
 ## Quick start
 
@@ -99,6 +129,12 @@ git clone https://github.com/juliosuas/copyfail-guard.git
 cd copyfail-guard
 sudo ./scripts/install.sh
 sudo copyfail-guard status
+```
+
+The installer supports pinning the source and destination for controlled rollouts:
+
+```bash
+sudo env COPYFAIL_GUARD_REF=v0.2.0 ./scripts/install.sh
 ```
 
 Container / CI hardening:
@@ -159,7 +195,7 @@ Optional visibility tools:
 
 Seccomp profile patching:
 
-- `python3` is required for `seccomp-patch`
+- `python3` is required for `--json`, `seccomp-patch`, and `tools/afalg-socket-test.py`
 
 No exploit code, compiler, kernel headers, or third-party packages are required.
 
@@ -325,19 +361,20 @@ ss -xa | grep -i alg || true
 ## Operator documentation
 
 - [Incident response runbook](docs/incident-response-runbook.md)
+- [Fleet rollout guide](docs/fleet-rollout.md)
 - [Seccomp validation notes](docs/seccomp-validation.md)
+- [Safe assessment model](docs/safe-assessment.md)
 - [Security policy](SECURITY.md)
+- [Support policy](SUPPORT.md)
+- [Contributing guide](CONTRIBUTING.md)
 - [Changelog](CHANGELOG.md)
 
-## Usability rating
+## Project maturity
 
-Current target audience: Linux sysadmins, DevSecOps engineers, platform teams, and incident responders.
-
-- Installation friction: low. Clone-and-run requires no package manager beyond standard Linux tooling; `python3` is only needed for `seccomp-patch`.
-- Operator UX: high. `doctor`, `assess`, `mitigate`, `verify`, and `rollback` map to an incident-response flow.
-- Casual-user UX: medium. This is kernel/container hardening; the tool keeps language direct, but the domain still requires Linux administration judgment.
-
-Resolution rating: mitigation, not cure. The tool reduces exposure and verifies controls; vendor kernel update + reboot is the final resolution.
+- Current scope: defensive assessment, host mitigation for modular `algif_aead`, seccomp hardening for untrusted workloads, and rollback.
+- Supported user: operators comfortable with Linux host and container hardening.
+- Release style: tagged releases, changelog entries, GitHub Actions smoke tests, and issue templates for reproducible reports.
+- Stability promise: avoid exploit behavior, keep host writes narrow, document exit-code semantics, and preserve existing runtime seccomp baselines.
 
 ## Limitations
 
@@ -379,12 +416,17 @@ Defense in depth. Container and CI workloads are common places where untrusted c
 
 Because default runtime profiles contain many hardening decisions. Replacing them with a minimal emergency profile can accidentally remove protections. `seccomp-patch` keeps your baseline and adds the AF_ALG denial.
 
+### Can I use this across a fleet?
+
+Yes. Start with `doctor` and `assess --json`, stage mitigation on a small Linux sample, then roll out host mitigation and seccomp profile changes separately. See [Fleet rollout guide](docs/fleet-rollout.md).
+
 ## References
 
-- NVD: CVE-2026-31431
-- CERT-EU advisory: High Vulnerability in the Linux Kernel (“Copy Fail”)
-- copy.fail public technical advisory
-- Linux upstream fix/revert: `crypto: algif_aead - Revert to operating out-of-place`
+- [NVD: CVE-2026-31431](https://nvd.nist.gov/vuln/detail/CVE-2026-31431)
+- [CERT-EU advisory: High Vulnerability in the Linux Kernel ("Copy Fail")](https://cert.europa.eu/publications/security-advisories/2026-005/)
+- [CISA Known Exploited Vulnerabilities entry](https://www.cisa.gov/known-exploited-vulnerabilities-catalog?field_cve=CVE-2026-31431)
+- [copy.fail public technical advisory](https://copy.fail)
+- [Linux stable fix: `crypto: algif_aead - Revert to operating out-of-place`](https://git.kernel.org/stable/c/a664bf3d603dc3bdcf9ae47cc21e0daec706d7a5)
 
 ## Author
 
