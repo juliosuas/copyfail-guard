@@ -24,6 +24,7 @@ grep -q 'CI smoke' docs/community-validation.md
 grep -q 'EXPOSED_AUTOLOAD_POSSIBLE' docs/sample-outputs.md
 grep -q 'Release checklist' README.md
 grep -q 'gpg-auto-import-keys' .github/workflows/ci.yml
+grep -Fq "Do not publish until the \`v0.3.0\` tag exists" docs/releases/v0.3.0.md
 
 bin/copyfail-guard.sh --no-logo seccomp-docker /tmp/copyfail-emergency.json >/tmp/cfg-seccomp.txt
 python3 -m json.tool /tmp/copyfail-emergency.json >/dev/null
