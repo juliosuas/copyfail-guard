@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+No unreleased changes.
+
+## v0.3.0 - Adoption, community validation, and release readiness
+
 - Added contribution, support, pull-request, issue-template, and Dependabot metadata to make maintenance expectations clearer.
 - Added a fleet rollout guide plus Ansible and GitHub Actions examples for safer adoption.
 - Added a Makefile for local smoke and lint checks.
