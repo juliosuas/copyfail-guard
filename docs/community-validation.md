@@ -1,6 +1,8 @@
 # Community validation guide
 
-CopyFail Guard gets more useful when operators share safe, reproducible results from real hosts and runtimes. Stars help visibility, but compatibility reports help trust.
+CopyFail Guard gets more useful when operators share safe, reproducible results
+from real hosts and runtimes. Stars help visibility, but compatibility reports
+help trust.
 
 ## What to report
 
@@ -49,9 +51,13 @@ BLOCKED: socket(AF_ALG) denied by policy (...)
 - full `/etc` dumps, kernel configs with local identifiers, or proprietary seccomp baselines
 - secrets, tokens, CI logs with environment variables, or cloud account details
 
+Kernel version, distro version, command output, and sanitized runtime names are
+enough for a useful report.
+
 ## Current validation coverage
 
-Automated smoke tests currently cover command syntax, JSON output, seccomp generation, and profile patching across these container images:
+Automated smoke tests currently cover command syntax, JSON output, seccomp
+generation, and profile patching across these container images:
 
 | Environment | Coverage type |
 |---|---|
@@ -62,7 +68,9 @@ Automated smoke tests currently cover command syntax, JSON output, seccomp gener
 | Amazon Linux 2023 | CI smoke |
 | openSUSE Leap 15.6 | CI smoke |
 
-These CI checks do not prove host kernel remediation. Field reports are still valuable for real hosts, Kubernetes nodes, CI runners, and production seccomp baselines.
+These CI checks do not prove host kernel remediation. Field reports are still
+valuable for real hosts, Kubernetes nodes, CI runners, and production seccomp
+baselines.
 
 ## How to submit
 
@@ -75,4 +83,11 @@ Open a **Compatibility report** issue and include:
 - result summary
 - constraints or exceptions
 
-Good reports can become README/docs entries, regression tests, or runtime-specific examples.
+Good reports can become README/docs entries, regression tests, or
+runtime-specific examples.
+
+## Safety boundary
+
+Do not submit exploit payloads, privilege-escalation proof, or destructive
+tests. This project validates operational exposure and mitigation state only.
+Vendor kernel patching and reboot remain the durable fix.
