@@ -14,7 +14,7 @@ bin/copyfail-guard.sh doctor --json >/tmp/cfg-doctor.json 2>/tmp/cfg-doctor.err 
 python3 -m json.tool /tmp/cfg-doctor.json >/dev/null
 grep -q '"command": "doctor"' /tmp/cfg-doctor.json
 grep -Fq "| \`10\` | AF_ALG socket creation was permitted |" docs/seccomp-validation.md
-grep -q 'sys.exit(10)' tools/afalg-socket-test.py
+python3 -m unittest discover -s tests -p 'test_*.py'
 grep -q 'COPYFAIL_GUARD_REF' scripts/install.sh
 grep -q 'Expected AF_ALG to be blocked' examples/github-actions-seccomp-check.yml
 grep -q "grep -q '^BLOCKED:'" examples/github-actions-seccomp-check.yml

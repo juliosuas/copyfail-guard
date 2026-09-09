@@ -10,18 +10,30 @@ import sys
 
 AF_ALG = getattr(socket, "AF_ALG", 38)
 
-try:
-    s = socket.socket(AF_ALG, socket.SOCK_SEQPACKET, 0)
-except PermissionError as exc:
-    print(f"BLOCKED: socket(AF_ALG) denied by policy ({exc})")
-    sys.exit(0)
-except OSError as exc:
-    if exc.errno in {errno.EAFNOSUPPORT, errno.EPROTONOSUPPORT, errno.EINVAL}:
-        print(f"UNSUPPORTED: AF_ALG is not available in this runtime ({exc})")
-        sys.exit(2)
-    print(f"ERROR: unexpected socket(AF_ALG) failure: {exc}")
-    sys.exit(3)
-else:
-    s.close()
-    print("PERMITTED: socket(AF_ALG) succeeded. Seccomp AF_ALG block is NOT active for this process.")
-    sys.exit(10)
+
+def probe(socket_factory=socket.socket):
+    """Return the operator-facing result and documented process exit code."""
+    try:
+        afalg_socket = socket_factory(AF_ALG, socket.SOCK_SEQPACKET, 0)
+    except PermissionError as exc:
+        return f"BLOCKED: socket(AF_ALG) denied by policy ({exc})", 0
+    except OSError as exc:
+        if exc.errno in {errno.EAFNOSUPPORT, errno.EPROTONOSUPPORT, errno.EINVAL}:
+            return f"UNSUPPORTED: AF_ALG is not available in this runtime ({exc})", 2
+        return f"ERROR: unexpected socket(AF_ALG) failure: {exc}", 3
+
+    afalg_socket.close()
+    return (
+        "PERMITTED: socket(AF_ALG) succeeded. Seccomp AF_ALG block is NOT active for this process.",
+        10,
+    )
+
+
+def main():
+    message, code = probe()
+    print(message)
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main())
